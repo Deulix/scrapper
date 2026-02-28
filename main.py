@@ -1,85 +1,107 @@
+import asyncio
 import json
-import time
+import os
+from datetime import datetime as dt
+from functools import wraps
+from typing import Callable
 
-import requests
-from bs4 import BeautifulSoup
+import aiofiles
+import httpx
 
-SITE_URL = "https://inote.by/index.php?route=product/category&path=451"
+from scrapper import scrapper
 
+mapping = {
+    "ОЗУ": 451,
+    "Видеокарты": 169,
+    "Процессоры": 433,
+    "Материнские платы": 436,
+    "SSD": 556,
+}
 
-def scrapper(url):
-    headers = {"User-Agent": "Mozilla/5.0"}
-
-    response = requests.get(url, headers=headers)
-
-    if response.status_code != 200:
-        print(f"Ошибка доступа! {response.status_code}")
-
-    soup = BeautifulSoup(response.text, "html.parser")
-
-    products = soup.find_all("div", class_="product-layout")
-
-    results = []
-
-    for item in products:
-        name = item.find("div", class_="us-module-title").find("a").text.strip()
-        is_available_part = item.find(
-            "a", class_="us-module-cart-btn button-cart"
-        ).text.strip()
-
-        is_available = str(is_available_part).lower().strip() == "в корзину"
-        print(is_available)
-
-        try:
-            price = item.find("span", class_="us-module-price-old").text.strip()
-            price_with_off = item.find(
-                "span", class_="us-module-price-new"
-            ).text.strip()
-        except AttributeError:
-            price = item.find("span", class_="us-module-price-actual").text.strip()
-            price_with_off = None
-
-        data = {
-            "timestamp": int(time.time()),
-            "source": "inote.by",
-            "name": name,
-            "price": price,
-            "price_with_off": price_with_off,
-            "available": is_available,
-        }
-        results.append(data)
-        print(f"Найдено: {name} | Цена: {price}")
-
-    return results
+SITE_URL = "https://inote.by/index.php?route=product/category&path="
 
 
-def save_to_jsonl(data_list):
-    with open("raw_ram_data.jsonl", "a", encoding="utf-8") as f:
-        for entry in data_list:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+def async_time_decorator(func: Callable):
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        start_time = dt.now()
+        result = await func(*args, **kwargs)
+        end_time = dt.now()
+        time_delta = end_time - start_time
+        if time_delta.seconds >= 60:
+            work_time = (
+                f"{time_delta.seconds // 60} минут {time_delta.seconds % 60} секунд"
+            )
+        else:
+            work_time = f"{time_delta.seconds} секунд"
+
+        print("\n=== СКРАППЕР ===")
+        print(f"Начало работы: {start_time.strftime('%d.%m.%Y, %H:%M:%S')}")
+        print(f"Конец работы: {end_time.strftime('%d.%m.%Y, %H:%M:%S')}")
+        print(f"Время работы: {work_time}\n")
+
+        return result
+
+    return wrapper
 
 
-def main():
-    data = scrapper(SITE_URL)
-    if data:
-        save_to_jsonl(data)
-        print(f"Сохранено {len(data)} позиций в raw_ram_data.jsonl")
+file_lock = asyncio.Lock()
 
-    else:
+
+async def save_to_jsonl(data_list):
+    lines = (
+        "\n".join([json.dumps(entry, ensure_ascii=False) for entry in data_list]) + "\n"
+    )
+    async with file_lock:
+        async with aiofiles.open("products_raw_data.jsonl", "a", encoding="utf-8") as f:
+            await f.write(lines)
+
+
+async def category_process(client, category_name, category_id):
+    url = f"{SITE_URL}{category_id}"
+    data = await scrapper(client, url)
+
+    if not data:
+        print(f"ОШИБКА ЧТЕНИЯ КАТЕГОРИИ [{category_name}]")
         return
 
-    url = SITE_URL + "&page="
-    i = 2
-    while i < 100:
-        new_url = url + str(i)
-        data = scrapper(new_url)
-        if not data:
-            break
-        save_to_jsonl(data)
-        print(f"Сохранено {len(data)} позиций в raw_ram_data.jsonl")
+    await save_to_jsonl(data)
 
-        i += 1
+    url += "&page="
+    page = 2
+    chunk_size = 2
+    found = True
+
+    while found:
+        tasks = [scrapper(client, f"{url}{p}") for p in range(page, page + chunk_size)]
+        page += chunk_size
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for result in results:
+            if isinstance(result, Exception):
+                continue
+
+            if not result:
+                found = False
+                break
+
+            await save_to_jsonl(result)
+
+
+@async_time_decorator
+async def main():
+    async with httpx.AsyncClient() as client:
+        category_tasks = [
+            category_process(client, category_name, category_id)
+            for category_name, category_id in mapping.items()
+        ]
+
+        await asyncio.gather(*category_tasks)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        os.remove("products_raw_data.jsonl")
+    except FileNotFoundError:
+        print("Файл products_raw_data.jsonl не найден для удаления")
+    asyncio.run(main())
