@@ -1,0 +1,12 @@
+services:
+  airflow-standalone:
+    image: apache/airflow:3.1.7
+    user: root
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/opt/airflow
+    environment:
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+    command: airflow standalone
