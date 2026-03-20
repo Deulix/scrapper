@@ -18,12 +18,15 @@ mapping = {
     "SSD": 556,
 }
 
+time_delta = None
+
 
 def async_time_decorator(func: Callable):
     async def wrapper(*args, **kwargs):
         start_time = dt.now()
         result = await func(*args, **kwargs)
         end_time = dt.now()
+        global time_delta
         time_delta = end_time - start_time
         if time_delta.seconds >= 60:
             work_time = (
@@ -104,3 +107,8 @@ if __name__ == "__main__":
     except FileNotFoundError:
         print("Файл products_raw_data.jsonl не найден для удаления")
     asyncio.run(main())
+    with open(RAW_DATA_DIR / "products_raw_data.jsonl", encoding="utf-8") as file:
+        count = sum(1 for _ in file)
+        print(
+            f"Количество строк: {count}, ~{(count / time_delta.total_seconds()):.2f} строк/cек"
+        )
