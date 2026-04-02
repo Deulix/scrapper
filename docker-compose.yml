@@ -1,0 +1,7 @@
+services:
+    scrapper:
+        build: .
+        container_name: scrapper
+        restart: on-failure
+        volumes:
+            - ./data:/app/data

@@ -13,3 +13,4 @@ wheels/
 data/
 .env
 *.log
+simple_auth_manager_passwords.json.generated

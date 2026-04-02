@@ -1,9 +1,6 @@
 ## 📊 Web scrapper
 Скрапер для получения данных о компьютерных комплектующих с сайта inote.by
 
-## ‼️Важно
-Для работы требуется Java Developer Kit 17+
-
 ## ⚙️ Установка
 1. **Клонируйте репозиторий**
 ```bash
@@ -13,7 +10,7 @@ git clone https://github.com/Deulix/scrapper.git
 ```bash
 cd '.\scrapper\'
 ```
-3. **Запустите через Docker Compose**
+3. **Запустите скрипт**
 ```
 docker compose up -d
 ```
@@ -23,9 +20,15 @@ docker compose up -d
 scrapper/
 ├── data/
 │   ├── clean/
-│   │   └── ...
+│   │   └── data.csv
 │   └── raw/
+│       └── products_raw_data.jsonl
+├── image
+│   └── README
 │       └── ...
+├── logs/
+│   └── ...
+├── src/
 │   ├── scrapper/
 │   │   └── scrapper.py
 │   ├── settings/
@@ -34,11 +37,13 @@ scrapper/
 │   │   └── transform.py
 │   └── main.py
 ├── tests/
-|   └── ...
+│   └── ...
 ├── .dockerignore
 ├── .env
 ├── .gitignore
 ├── .python-version
+├── docker-compose.yml
+├── Dockerfile
 ├── pyproject.toml
 ├── README.md
 └── uv.lock

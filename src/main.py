@@ -9,6 +9,7 @@ import httpx
 
 from src.scrapper.scrapper import scrapper
 from src.settings.config import RAW_DATA_DIR, SITE_URL
+from src.spark.transform import df, transform
 
 mapping = {
     "Оперативная память": 451,
@@ -18,22 +19,17 @@ mapping = {
     "SSD": 556,
 }
 
-time_delta = None
-
 
 def async_time_decorator(func: Callable):
     async def wrapper(*args, **kwargs):
         start_time = dt.now()
         result = await func(*args, **kwargs)
         end_time = dt.now()
-        global time_delta
-        time_delta = end_time - start_time
-        if time_delta.seconds >= 60:
-            work_time = (
-                f"{time_delta.seconds // 60} минут {time_delta.seconds % 60} секунд"
-            )
+        wrapper.time_delta = end_time - start_time
+        if wrapper.time_delta.seconds >= 60:
+            work_time = f"{wrapper.time_delta.seconds // 60} минут {wrapper.time_delta.seconds % 60} секунд"
         else:
-            work_time = f"{time_delta.seconds} секунд"
+            work_time = f"{wrapper.time_delta.seconds} секунд"
 
         print("\n=== СКРАППЕР ===")
         print(f"Начало работы: {start_time.strftime('%d.%m.%Y, %H:%M:%S')}")
@@ -42,6 +38,7 @@ def async_time_decorator(func: Callable):
 
         return result
 
+    wrapper.time_delta = None
     return wrapper
 
 
@@ -109,6 +106,7 @@ if __name__ == "__main__":
     asyncio.run(main())
     with open(RAW_DATA_DIR / "products_raw_data.jsonl", encoding="utf-8") as file:
         count = sum(1 for _ in file)
-        print(
-            f"Количество строк: {count}, ~{(count / time_delta.total_seconds()):.2f} строк/cек"
-        )
+    print(
+        f"Количество строк: {count}, ~{(count / main.time_delta.total_seconds()):.2f} строк/cек"
+    )
+    transform(df)
