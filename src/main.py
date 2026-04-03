@@ -1,7 +1,8 @@
 import asyncio
 import json
-import os
 from datetime import datetime as dt
+from datetime import timedelta
+from functools import update_wrapper
 from typing import Callable
 
 import aiofiles
@@ -18,6 +19,30 @@ mapping = {
     "Материнские платы": 436,
     "SSD": 556,
 }
+
+
+class AsyncTimeDecorator:
+    def __init__(self, func):
+        update_wrapper(self, func)
+        self.func = func
+
+    async def __call__(self, *args, **kwargs):
+        self.start_time = dt.now()
+        result = await self.func(*args, **kwargs)
+        self.end_time = dt.now()
+        self.time_delta: timedelta = self.end_time - self.start_time
+        seconds = self.time_delta.seconds
+
+        if seconds >= 60:
+            self.work_time = f"{seconds // 60} минут {seconds % 60} секунд"
+        else:
+            self.work_time = f"{seconds} секунд"
+
+        print("\n=== СКРАППЕР ===")
+        print(f"Начало работы: {self.start_time.strftime('%d.%m.%Y, %H:%M:%S')}")
+        print(f"Конец работы: {self.end_time.strftime('%d.%m.%Y, %H:%M:%S')}")
+        print(f"Время работы: {self.work_time}\n")
+        return result
 
 
 def async_time_decorator(func: Callable):
@@ -87,7 +112,7 @@ async def category_process(client, category_name, category_id):
             await save_to_jsonl(result)
 
 
-@async_time_decorator
+@AsyncTimeDecorator
 async def main():
     async with httpx.AsyncClient() as client:
         category_tasks = [
@@ -99,14 +124,18 @@ async def main():
 
 
 if __name__ == "__main__":
-    try:
-        os.remove(RAW_DATA_DIR / "products_raw_data.jsonl")
-    except FileNotFoundError:
-        print("Файл products_raw_data.jsonl не найден для удаления")
+    # try:
+    #     os.remove(RAW_DATA_DIR / "products_raw_data.jsonl")
+    # except FileNotFoundError:
+    #     print("Файл products_raw_data.jsonl не найден для удаления")
     asyncio.run(main())
     with open(RAW_DATA_DIR / "products_raw_data.jsonl", encoding="utf-8") as file:
-        count = sum(1 for _ in file)
+        count = sum(
+            1
+            for line in file
+            if json.loads(line).get("timestamp") >= main.start_time.timestamp()
+        )
     print(
-        f"Количество строк: {count}, ~{(count / main.time_delta.total_seconds()):.2f} строк/cек"
+        f"Количество новых строк: {count}, ~{(count / main.time_delta.seconds):.2f} строк/cек"
     )
     transform(df)

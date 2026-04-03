@@ -16,6 +16,7 @@ logs/
 
 src/tests
 .pytest_cache/
+image/
 
 *.ipynb
 *.log
